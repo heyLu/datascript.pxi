@@ -30,7 +30,10 @@
   Keys and idx are cached for fast iteration inside a leaf
 "
   :author "Nikita Prokopov"}
-  datascript.btset)
+  datascript.btset
+
+  (require datascript.utils :as u)
+  (refer 'datascript.utils :refer :all))
 
 (declare BTSet Node LeafNode)
 
@@ -112,9 +115,9 @@
 
 (defn cut
   ([arr cut-from]
-    (.slice arr cut-from))
+    (aslice arr cut-from))
   ([arr cut-from cut-to]
-    (.slice arr cut-from cut-to)))
+    (aslice arr cut-from cut-to)))
 
 (defn splice [arr splice-from splice-to xs]
   (cut-n-splice arr 0 (alength arr) splice-from splice-to xs))
@@ -135,7 +138,7 @@
             (if (< i r1-l) i (- i r1-l))
             (aget (if (< i a1-l) a1 a2)
                   (if (< i a1-l) i (- i a1-l)))))
-    #js [r1 r2]))
+    (to-array [r1 r2])))
 
 (defn ^boolean eq-arr [a1 a1-from a1-to a2 a2-from a2-to cmp]
   (let [len (- a1-to a1-from)]
@@ -170,7 +173,7 @@
   [min-len max-len arr]
   (let [chunk-len (half (+ max-len min-len))
         len       (alength arr)
-        acc       #js []]
+        acc       (to-array [])]
     (when (pos? len)
       (loop [pos 0]
         (let [rest (- len pos)]
@@ -208,9 +211,9 @@
 
 (defn return-array
   "Drop non-nil references and return array of arguments"
-  ([a1] #js [a1])
-  ([a1 a2] (if a1 (if a2 #js [a1 a2] #js [a1]) #js [a2]))
-  ([a1 a2 a3] (if a1 (if a2 (if a3 #js [a1 a2 a3] #js [a1 a2]) (if a3 #js [a1 a3] #js [a1])) (if a2 (if a3 #js [a2 a3] #js [a2]) #js [a3]))))
+  ([a1] (to-array [a1]))
+  ([a1 a2] (to-array (if a1 (if a2 [a1 a2] [a1]) [a2])))
+  ([a1 a2 a3] (to-array (if a1 (if a2 (if a3 [a1 a2 a3] [a1 a2]) (if a3 [a1 a3] [a1])) (if a2 (if a3 [a2 a3] [a2]) [a3])))))
 
 (defn rotate [node root? left right]
   (cond
@@ -247,14 +250,14 @@
     (alength keys))
   
   (merge [_ next]
-    (Node. (.concat keys (.-keys next))
-           (.concat pointers (.-pointers next))))
+    (->Node (aconcat keys (.-keys next))
+            (aconcat pointers (.-pointers next))))
   
   (merge-n-split [_ next]
     (let [ks (merge-n-split keys (.-keys next))
           ps (merge-n-split pointers (.-pointers next))]
-      (return-array (Node. (aget ks 0) (aget ps 0))
-                    (Node. (aget ks 1) (aget ps 1)))))
+      (return-array (->Node (aget ks 0) (aget ps 0))
+                    (->Node (aget ks 1) (aget ps 1)))))
 
   (lookup [_ key]
     (let [idx (lookup-range keys key)]
@@ -269,13 +272,13 @@
               new-pointers (splice         pointers idx (inc idx) nodes)]
           (if (<= (alength new-pointers) max-len)
             ;; ok as is
-            #js [(Node. new-keys new-pointers)]
+            (to-array [(Node. new-keys new-pointers)])
             ;; gotta split it up
             (let [middle  (half (alength new-pointers))]
-              #js [(Node. (cut new-keys     0 middle)
-                          (cut new-pointers 0 middle))
-                   (Node. (cut new-keys     middle)
-                          (cut new-pointers middle))]))))))
+              (to-array [(Node. (cut new-keys     0 middle)
+                                (cut new-pointers 0 middle))
+                         (Node. (cut new-keys     middle)
+                                (cut new-pointers middle))])))))))
 
   (disj [this key root? left right]
     (let [idx (lookup-range keys key)]
@@ -299,7 +302,7 @@
     (alength keys))
   
   (merge [_ next]
-    (LeafNode. (.concat keys (.-keys next))))
+    (LeafNode. (aconcat keys (.-keys next))))
   
   (merge-n-split [_ next]
     (let [ks (merge-n-split keys (.-keys next))]
@@ -325,20 +328,19 @@
           (let [middle (half (inc keys-l))]
             (if (> idx middle)
               ;; new key goes to the second half
-              #js [(LeafNode. (cut keys 0 middle))
-                   (LeafNode. (cut-n-splice keys middle keys-l idx idx #js [key]))]
+              (to-array [(LeafNode. (cut keys 0 middle))
+                         (LeafNode. (cut-n-splice keys middle keys-l idx idx (to-array [key])))])
               ;; new key goes to the first half
-              #js [(LeafNode. (cut-n-splice keys 0 middle idx idx #js [key]))
-                   (LeafNode. (cut keys middle keys-l))]))
+              (to-array [(LeafNode. (cut-n-splice keys 0 middle idx idx (to-array [key])))
+                         (LeafNode. (cut keys middle keys-l))])))
        
         ;; ok as is
-        :else
-          #js [(LeafNode. (splice keys idx idx #js [key]))])))
+        :else (to-array [(LeafNode. (splice keys idx idx (to-array [key])))]))))
   
   (disj [this key root? left right]
     (let [idx (lookup-exact keys key)]
       (when-not (== -1 idx) ;; key is here
-        (let [new-keys (splice keys idx (inc idx) #js [])]
+        (let [new-keys (splice keys idx (inc idx) (to-array []))]
           (rotate (LeafNode. new-keys) root? left right))))))
 
 (defn keys-for [set path]
@@ -419,7 +421,6 @@
 (defn next-path [set path]
   (-next-path (.-root set) path (.-shift set)))
 
-
 (deftype BTSetIter [set path till-path keys idx]
   ISeqable
   (-seq [this]
@@ -429,12 +430,12 @@
   (-first [_]
     (when keys (aget keys idx)))
   
-  (-rest [this]
-    (if-let [next (-next this)]
-      next
-      (BTSetIter. set -1 till-path nil -1)))
+  ;; (-rest [this]
+  ;;             (if-let [next (-next this)]
+  ;;               next
+  ;;               (BTSetIter. set -1 till-path nil -1)))
   
-  INext
+  ;INext
   (-next [_]
     (if (< (inc idx) (alength keys))
       ;; can use cached array to move forward
@@ -497,39 +498,40 @@
   (toString [this]
     (pr-str* this))
   
-  ICloneable
-  (-clone [_] (BTSet. root shift cnt comparator meta __hash))
+  ;ICloneable
+  ;(-clone [_] (BTSet. root shift cnt comparator meta __hash))
 
-  IWithMeta
+  ;IWithMeta
+  IMeta
   (-with-meta [_ new-meta] (BTSet. root shift cnt comparator new-meta __hash))
 
   IMeta
   (-meta [_] meta)
  
-  IEmptyableCollection
-  (-empty [_] (BTSet. (LeafNode. (array)) 0 0 comparator meta 0))
+  ;IEmptyableCollection
+  ;(-empty [_] (BTSet. (LeafNode. (array)) 0 0 comparator meta 0))
   
-  IEquiv
-  (-equiv [this other]
+  IObject
+  (-eq [this other]
     (and
       (set? other)
       (== cnt (count other))
       (every? #(contains? this %) other)))
 
-  IHash
+  ;IHash
   (-hash [coll] (caching-hash coll hash-iset __hash))
    
-  ICollection
+  IPersistentCollection
   (-conj [set key] (btset-conj set key comparator))
 
-  ISet
-  (-disjoin [set key]
-    (btset-disj set key comparator))
+  ;; ISet
+  ;; (-disjoin [set key]
+  ;;   (btset-disj set key comparator))
   
-  ILookup 
-  (-lookup [set k]
-    (-lookup set k nil))
-  (-lookup [_ k not-found]
+  ILookup
+  ;; (-lookup [set k]
+  ;;   (-lookup set k nil))
+  (-val-at [_ k not-found]
     (binding [*cmp* comparator]
       (or (.lookup root k) not-found)))
 
@@ -539,16 +541,18 @@
   
   ICounted
   (-count [_] cnt)
- 
+
   IFn
-  (-invoke [coll k]
-    (-lookup coll k))
+  ;; (-invoke [coll k]
+  ;;   (-lookup coll k))
   (-invoke [coll k not-found]
-    (-lookup coll k not-found))
+    (-val-at coll k not-found))
   
-  IPrintWithWriter
-  (-pr-writer [this writer opts]
-    (pr-sequential-writer writer pr-writer "#{" " " "}" opts (seq this))))
+
+  )
+  ;IPrintWithWriter
+  ;; (-pr-writer [this writer opts]
+  ;;   (pr-sequential-writer writer pr-writer "#{" " " "}" opts (seq this)))
 
 (defn alter-btset [set root shift cnt]
   (BTSet. root shift cnt (.-comparator set) (.-meta set) nil))
