@@ -22,9 +22,10 @@
         a))))
 
 (defn map-array [a f] ; array first to stay with the `(.map a f)` pattern in cljs
-  (dotimes [i (alength a)]
-    (aset a i (f (aget a i))))
-  a)
+  (let [ma (make-array (alength a))]
+    (dotimes [i (alength ma)]
+      (aset ma i (f (aget a i))))
+    ma))
 
 (def == =)
 
