@@ -272,7 +272,7 @@
     (let [idx   (binary-search-l keys 0 (- (alength keys) 2) key)
           nodes (.conj (aget pointers idx) key)]
       (when nodes
-        (let [new-keys     (check-n-splice keys     idx (inc idx) (.map nodes lim-key))
+        (let [new-keys     (check-n-splice keys     idx (inc idx) (map-array nodes lim-key))
               new-pointers (splice         pointers idx (inc idx) nodes)]
           (if (<= (alength new-pointers) max-len)
             ;; ok as is
@@ -294,7 +294,7 @@
           (when disjned     ;; short-circuit, key not here
             (let [left-idx     (if left-child  (dec idx) idx)
                   right-idx    (if right-child (+ 2 idx) (+ 1 idx))
-                  new-keys     (check-n-splice keys left-idx right-idx (.map disjned lim-key))
+                  new-keys     (check-n-splice keys left-idx right-idx (map-array disjned lim-key))
                   new-pointers (splice pointers left-idx right-idx disjned)]
               (rotate (->Node new-keys new-pointers) root? left right))))))))
 
@@ -374,7 +374,7 @@
         ;; introducing new root
         :else
           (alter-btset set
-            (->Node (.map roots lim-key) roots)
+            (->Node (map-array roots lim-key) roots)
             (+ (.shift set) level-shift)
             (inc (.cnt set)))))))
 
@@ -572,7 +572,7 @@
         1 (->BTSet (first current-level) shift (alength arr) cmp nil 0)
         (recur (->> current-level
                     (arr-partition-approx min-len max-len)
-                    (arr-map-inplace #(->Node (.map % lim-key) %)))
+                    (arr-map-inplace #(->Node (map-array % lim-key) %)))
                (+ shift level-shift))))))
 
 (defn -btset-from-seq [seq cmp]

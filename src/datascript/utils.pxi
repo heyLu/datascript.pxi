@@ -21,6 +21,11 @@
           (recur (inc i) (next args)))
         a))))
 
+(defn map-array [a f] ; array first to stay with the `(.map a f)` pattern in cljs
+  (dotimes [i (alength a)]
+    (aset a i (f (aget a i))))
+  a)
+
 (def == =)
 
 (defn compare [x y] (- x y))
