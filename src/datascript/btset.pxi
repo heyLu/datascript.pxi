@@ -117,7 +117,11 @@
   ([arr cut-from]
     (aslice arr cut-from))
   ([arr cut-from cut-to]
-    (aslice arr cut-from cut-to)))
+    (let [l (- cut-to cut-from)
+          a (make-array l)]
+      (doseq [i (range l)]
+        (aset a i (aget arr (+ cut-from i))))
+      a)))
 
 (defn splice [arr splice-from splice-to xs]
   (cut-n-splice arr 0 (alength arr) splice-from splice-to xs))
@@ -207,7 +211,7 @@
 ;; 
 
 (defn lim-key [node]
-  (aget (.-keys node) (dec (alength (.-keys node)))))
+  (aget (.keys node) (dec (alength (.keys node)))))
 
 (defn return-array
   "Drop non-nil references and return array of arguments"
@@ -250,12 +254,12 @@
     (alength keys))
   
   (merge [_ next]
-    (->Node (aconcat keys (.-keys next))
-            (aconcat pointers (.-pointers next))))
+    (->Node (aconcat keys (.keys next))
+            (aconcat pointers (.pointers next))))
   
   (merge-n-split [_ next]
-    (let [ks (merge-n-split keys (.-keys next))
-          ps (merge-n-split pointers (.-pointers next))]
+    (let [ks (merge-n-split keys (.keys next))
+          ps (merge-n-split pointers (.pointers next))]
       (return-array (->Node (aget ks 0) (aget ps 0))
                     (->Node (aget ks 1) (aget ps 1)))))
 
@@ -272,13 +276,13 @@
               new-pointers (splice         pointers idx (inc idx) nodes)]
           (if (<= (alength new-pointers) max-len)
             ;; ok as is
-            (to-array [(Node. new-keys new-pointers)])
+            (to-array [(->Node new-keys new-pointers)])
             ;; gotta split it up
             (let [middle  (half (alength new-pointers))]
-              (to-array [(Node. (cut new-keys     0 middle)
-                                (cut new-pointers 0 middle))
-                         (Node. (cut new-keys     middle)
-                                (cut new-pointers middle))])))))))
+              (to-array [(->Node (cut new-keys     0 middle)
+                                 (cut new-pointers 0 middle))
+                         (->Node (cut new-keys     middle)
+                                 (cut new-pointers middle))])))))))
 
   (disj [this key root? left right]
     (let [idx (lookup-range keys key)]
@@ -292,7 +296,7 @@
                   right-idx    (if right-child (+ 2 idx) (+ 1 idx))
                   new-keys     (check-n-splice keys left-idx right-idx (.map disjned lim-key))
                   new-pointers (splice pointers left-idx right-idx disjned)]
-              (rotate (Node. new-keys new-pointers) root? left right))))))))
+              (rotate (->Node new-keys new-pointers) root? left right))))))))
 
 (deftype LeafNode [keys]
   Object
@@ -302,12 +306,12 @@
     (alength keys))
   
   (merge [_ next]
-    (LeafNode. (aconcat keys (.-keys next))))
+    (->LeafNode (aconcat keys (.keys next))))
   
   (merge-n-split [_ next]
-    (let [ks (merge-n-split keys (.-keys next))]
-      (return-array (LeafNode. (aget ks 0))
-                    (LeafNode. (aget ks 1)))))
+    (let [ks (merge-n-split keys (.keys next))]
+      (return-array (->LeafNode (aget ks 0))
+                    (->LeafNode (aget ks 1)))))
   
   (lookup [_ key]
     (let [idx (lookup-exact keys key)]
@@ -328,33 +332,33 @@
           (let [middle (half (inc keys-l))]
             (if (> idx middle)
               ;; new key goes to the second half
-              (to-array [(LeafNode. (cut keys 0 middle))
-                         (LeafNode. (cut-n-splice keys middle keys-l idx idx (to-array [key])))])
+              (to-array [(->LeafNode (cut keys 0 middle))
+                         (->LeafNode (cut-n-splice keys middle keys-l idx idx (to-array [key])))])
               ;; new key goes to the first half
-              (to-array [(LeafNode. (cut-n-splice keys 0 middle idx idx (to-array [key])))
-                         (LeafNode. (cut keys middle keys-l))])))
+              (to-array [(->LeafNode (cut-n-splice keys 0 middle idx idx (to-array [key])))
+                         (->LeafNode (cut keys middle keys-l))])))
        
         ;; ok as is
-        :else (to-array [(LeafNode. (splice keys idx idx (to-array [key])))]))))
+        :else (to-array [(->LeafNode (splice keys idx idx (to-array [key])))]))))
   
   (disj [this key root? left right]
     (let [idx (lookup-exact keys key)]
       (when-not (== -1 idx) ;; key is here
         (let [new-keys (splice keys idx (inc idx) (to-array []))]
-          (rotate (LeafNode. new-keys) root? left right))))))
+          (rotate (->LeafNode new-keys) root? left right))))))
 
 (defn keys-for [set path]
-  (loop [level (.-shift set)
-         node  (.-root set)]
+  (loop [level (.shift set)
+         node  (.root set)]
     (if (pos? level)
-      (recur (- level level-shift) (aget (.-pointers node) (path-get path level)))
-      (.-keys node))))
+      (recur (- level level-shift) (aget (.pointers node) (path-get path level)))
+      (.keys node))))
 
 (declare alter-btset)
 
 (defn btset-conj [set key cmp]
   (binding [*cmp* cmp]
-    (let [roots (.conj (.-root set) key)]
+    (let [roots (.conj (.root set) key)]
       (cond
         ;; tree not changed
         (nil? roots)
@@ -364,36 +368,36 @@
         (== (alength roots) 1)
           (alter-btset set
             (aget roots 0)
-            (.-shift set)
-            (inc (.-cnt set)))
+            (.shift set)
+            (inc (.cnt set)))
        
         ;; introducing new root
         :else
           (alter-btset set
-            (Node. (.map roots lim-key) roots)
-            (+ (.-shift set) level-shift)
-            (inc (.-cnt set)))))))
+            (->Node (.map roots lim-key) roots)
+            (+ (.shift set) level-shift)
+            (inc (.cnt set)))))))
 
 (defn btset-disj [set key cmp]
   (binding [*cmp* cmp]
-    (let [new-roots (.disj (.-root set) key true nil nil)]
+    (let [new-roots (.disj (.root set) key true nil nil)]
       (if (nil? new-roots) ;; nothing changed, key wasn't in the set
         set
         (let [new-root (aget new-roots 0)]
           (if (and (instance? Node new-root)
-                   (== (alength (.-pointers new-root)) 1))
+                   (== (alength (.pointers new-root)) 1))
             
             ;; root has one child, make him new root
             (alter-btset set
-              (aget (.-pointers new-root) 0)
-              (- (.-shift set) level-shift)
-              (dec (.-cnt set)))
+              (aget (.pointers new-root) 0)
+              (- (.shift set) level-shift)
+              (dec (.cnt set)))
             
             ;; keeping root level
             (alter-btset set
               new-root
-              (.-shift set)
-              (dec (.-cnt set)))))))))
+              (.shift set)
+              (dec (.cnt set)))))))))
 
 ;; iteration
 
@@ -401,10 +405,10 @@
   (let [idx (path-get path level)]
     (if (pos? level)
       ;; inner node
-      (let [sub-path (-next-path (aget (.-pointers node) idx) path (- level level-shift))]
+      (let [sub-path (-next-path (aget (.pointers node) idx) path (- level level-shift))]
         (if (== -1 sub-path)
           ;; nested node overflow
-          (if (< (inc idx) (alength (.-pointers node)))
+          (if (< (inc idx) (alength (.pointers node)))
             ;; advance current node idx, reset subsequent indexes
             (path-set empty-path level (inc idx))
             ;; current node overflow
@@ -412,14 +416,14 @@
           ;; keep current idx
           (path-set sub-path level idx)))
       ;; leaf
-      (if (< (inc idx) (alength (.-keys node)))
+      (if (< (inc idx) (alength (.keys node)))
         ;; advance leaf idx
         (path-set empty-path 0 (inc idx))
         ;; leaf overflow
         -1))))
 
 (defn next-path [set path]
-  (-next-path (.-root set) path (.-shift set)))
+  (-next-path (.root set) path (.shift set)))
 
 (deftype BTSetIter [set path till-path keys idx]
   ISeqable
@@ -440,41 +444,41 @@
     (if (< (inc idx) (alength keys))
       ;; can use cached array to move forward
       (when (< (inc path) till-path)
-        (BTSetIter. set (inc path) till-path keys (inc idx)))
+        (->BTSetIter set (inc path) till-path keys (inc idx)))
       (let [path (next-path set path)]
         (when (and (not= -1 path) (< path till-path))
-          (BTSetIter. set path till-path (keys-for set path) (path-get path 0)))))))
+          (->BTSetIter set path till-path (keys-for set path) (path-get path 0)))))))
 
 (defn btset-iter [set]
-  (let [root-l (alength (.-keys (.-root set)))]
+  (let [root-l (alength (.keys (.root set)))]
     (when (pos? root-l)
-      (BTSetIter. set empty-path (path-set empty-path (.-shift set) root-l) (keys-for set empty-path) 0))))
+      (->BTSetIter set empty-path (path-set empty-path (.shift set) root-l) (keys-for set empty-path) 0))))
 
 (defn -seek [set key]
-  (loop [node  (.-root set)
+  (loop [node  (.root set)
          path  empty-path
-         level (.-shift set)]
-    (let [keys   (.-keys node)
+         level (.shift set)]
+    (let [keys   (.keys node)
           keys-l (alength keys)]
       (if (== 0 level)
         (let [idx (binary-search-l keys 0 (dec keys-l) key)]
           (if (== keys-l idx) -1 (path-set path 0 idx)))
         (let [idx (binary-search-l keys 0 (- keys-l 2) key)]
-          (recur (aget (.-pointers node) idx)
+          (recur (aget (.pointers node) idx)
                  (path-set path level idx)
                  (- level level-shift)))))))
 
 (defn -rseek [set key]
-  (loop [node  (.-root set)
+  (loop [node  (.root set)
          path  empty-path
-         level (.-shift set)]
-    (let [keys   (.-keys node)
+         level (.shift set)]
+    (let [keys   (.keys node)
           keys-l (alength keys)]
       (if (== 0 level)
         (let [idx (binary-search-r keys 0 (dec keys-l) key)]
           (path-set path 0 idx))
         (let [idx (binary-search-r keys 0 (- keys-l 2) key)]
-          (recur (aget (.-pointers node) idx)
+          (recur (aget (.pointers node) idx)
                  (path-set path level idx)
                  (- level level-shift)))))))
 
@@ -483,12 +487,12 @@
     (when-not (neg? path)
       (let [till-path (-rseek set key-to)]
         (when (> till-path path)
-          (BTSetIter. set path till-path (keys-for set path) (path-get path 0)))))))
+          (->BTSetIter set path till-path (keys-for set path) (path-get path 0)))))))
 
 (defn slice
   ([set key] (slice set key key))
   ([set key-from key-to]
-    (binding [*cmp* (.-comparator set)]
+    (binding [*cmp* (.comparator set)]
       (-slice set key-from key-to))))
 
 ;; public interface
@@ -503,7 +507,7 @@
 
   ;IWithMeta
   IMeta
-  (-with-meta [_ new-meta] (BTSet. root shift cnt comparator new-meta __hash))
+  (-with-meta [_ new-meta] (->BTSet root shift cnt comparator new-meta __hash))
 
   IMeta
   (-meta [_] meta)
@@ -555,7 +559,7 @@
   ;;   (pr-sequential-writer writer pr-writer "#{" " " "}" opts (seq this)))
 
 (defn alter-btset [set root shift cnt]
-  (BTSet. root shift cnt (.-comparator set) (.-meta set) nil))
+  (->BTSet root shift cnt (.comparator set) (.meta set) nil))
 
 (defn -btset-from-sorted-arr [arr cmp]
   (let [leafs (->> arr
@@ -564,11 +568,11 @@
     (loop [current-level leafs
            shift 0]
       (case (count current-level)
-        0 (BTSet. (LeafNode. (array)) 0 0 cmp nil 0)
-        1 (BTSet. (first current-level) shift (alength arr) cmp nil 0)
+        0 (->BTSet (LeafNode. (array)) 0 0 cmp nil 0)
+        1 (->BTSet (first current-level) shift (alength arr) cmp nil 0)
         (recur (->> current-level
                     (arr-partition-approx min-len max-len)
-                    (arr-map-inplace #(Node. (.map % lim-key) %)))
+                    (arr-map-inplace #(->Node (.map % lim-key) %)))
                (+ shift level-shift))))))
 
 (defn -btset-from-seq [seq cmp]
@@ -576,7 +580,7 @@
     (-btset-from-sorted-arr arr cmp)))
 
 (defn btset-by
-  ([cmp] (BTSet. (LeafNode. (array)) 0 0 cmp nil 0))
+  ([cmp] (->BTSet (->LeafNode (array)) 0 0 cmp nil 0))
   ([cmp & keys]
     (-btset-from-seq keys cmp)))
 

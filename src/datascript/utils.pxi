@@ -11,3 +11,16 @@
           (recur (inc i) (next s)))))))
 
 (def IWithMeta IMeta)
+
+(defn array [& args]
+  (let [a (make-array (count args))]
+    (loop [i 0 args args]
+      (if (seq args)
+        (do
+          (aset a i (first args))
+          (recur (inc i) (next args)))
+        a))))
+
+(def == =)
+
+(defn compare [x y] (- x y))
