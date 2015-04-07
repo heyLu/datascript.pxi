@@ -1,9 +1,8 @@
 (ns datascript.core
   (:require
     [datascript.btset :as btset]
-    [goog.array :as garray])
-  (:require-macros
-    [datascript :refer [combine-cmp case-tree]]))
+    [datascript.macros :refer [combine-cmp case-tree]]
+    [goog.array :as garray]))
 
 (def ^:const tx0 0x20000000)
 
