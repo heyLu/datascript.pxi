@@ -1,9 +1,10 @@
 (ns datascript.query
   (:require
-    [cljs.reader]
-    [clojure.set :as set]
-    [clojure.walk :as walk]
+    ;[cljs.reader]
+    [pixie.set :as set]
+    [pixie.walk :as walk]
     [datascript.core :as dc]
+    [datascript.utils :refer :all]
     [datascript.impl.entity :as de]))
 
 
@@ -57,7 +58,7 @@
 (defn join-tuples [t1 idxs1 t2 idxs2]
   (let [l1  (alength idxs1)
         l2  (alength idxs2)
-        res (js/Array. (+ l1 l2))]
+        res (make-array (+ l1 l2))]
     (dotimes [i l1]
       (aset res i (aget t1 (aget idxs1 i)))) ;; FIXME aget
     (dotimes [i l2]
@@ -68,7 +69,7 @@
   (Relation. (:attrs a) (concat (:tuples a) (:tuples b))))
 
 (defn prod-rel
-  ([] (Relation. {} [#js[]]))
+  ([] (Relation. {} [(make-array 0)]))
   ([rel1 rel2]
     (let [attrs1 (keys (:attrs rel1))
           attrs2 (keys (:attrs rel2))
@@ -157,10 +158,10 @@
       (reduce prod-rel
         (map #(in->rel %1 %2) form value))
     '_       ;; regular binding ?x
-      (Relation. {form 0} [#js [value]])))
+      (Relation. {form 0} [(to-array [value])])))
 
 (defn parse-rules [rules]
-  (let [rules (if (string? rules) (cljs.reader/read-string rules) rules)] ;; for datascript.js interop
+  (let [rules (if (string? rules) (read-string rules) rules)] ;; for datascript.js interop
     (group-by ffirst rules)))
 
 (defn parse-in [context [in value]]
@@ -338,15 +339,15 @@
   (let [[rule & call-args] clause
         seqid              (swap! rule-seqid inc)
         branches           (get (:rules context) rule)]
-    (for [branch branches
-          :let [[[_ & rule-args] & clauses] branch
-                replacements (zipmap rule-args call-args)]]
-      (walk/postwalk
-       #(if (free-var? %)
-          (or (replacements %)
-              (symbol (str (name %) "__auto__" seqid)))
-          %)
-        clauses))))
+    (for [branch branches]
+      (let [[[_ & rule-args] & clauses] branch
+                replacements (zipmap rule-args call-args)]
+        (walk/postwalk
+         #(if (free-var? %)
+            (or (replacements %)
+                (symbol (str (name %) "__auto__" seqid)))
+            %)
+          clauses)))))
 
 (defn remove-pairs [xs ys]
   (let [pairs (->> (map vector xs ys)
@@ -357,9 +358,9 @@
 (defn rule-gen-guards [rule-clause used-args]
   (let [[rule & call-args] rule-clause
         prev-call-args     (get used-args rule)]
-    (for [prev-args prev-call-args
-          :let [[call-args prev-args] (remove-pairs call-args prev-args)]]
-      [(concat ['-differ?] call-args prev-args)])))
+    (for [prev-args prev-call-args]
+      (let [[call-args prev-args] (remove-pairs call-args prev-args)]
+        [(concat ['-differ?] call-args prev-args)]))))
 
 (defn walk-collect [form pred]
   (let [res (atom [])]

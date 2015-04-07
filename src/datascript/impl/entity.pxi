@@ -63,12 +63,8 @@
   (get [this attr]
     (if (= attr ":db/id")
       eid
-      (if-let [[_ ns name] (re-matches #"(?:([^/]+)/)?_([^/]+)" attr)]
-        (let [attr (if ns (str ns "/" name) name)]
-          (-> (-lookup-backwards db eid attr nil)
-              multival->js))
-        (cond-> (-lookup this attr)
-          (dc/multival? db attr)
+      (let [attr (if ns (str ns "/" name) name)]
+        (-> (-lookup-backwards db eid attr nil)
             multival->js))))
   (forEach [this f]
     (doseq [[a v] (js-seq this)]
@@ -82,14 +78,13 @@
   (entry_set [this] (to-array (map to-array (js-seq this))))
   (value_set [this] (to-array (map second (js-seq this))))
 
-  IEquiv
-  (-equiv [_ o]
+  IObject
+  (-eq [_ o]
     (and
       (instance? Entity o)
       ;; (= db  (.-db o))
       (= eid (.-eid o))))
   
-  IHash
   (-hash [_]
     (hash eid)) ;; db?
   
@@ -104,9 +99,7 @@
     (count cache))
  
   ILookup
-  (-lookup [this attr]
-    (-lookup this attr nil))
-  (-lookup [_ attr not-found]
+  (-val-at [_ attr not-found]
     (if (= attr :db/id)
       eid
       (if-let [attr (dc/reverse-ref attr)]
@@ -121,7 +114,7 @@
                 not-found))))))
 
   IAssociative
-  (-contains-key? [this k]
+  (-contains-key [this k]
     (not= ::nf (-lookup this k ::nf)))
 
   IFn
@@ -130,20 +123,7 @@
   (-invoke [this k not-found]
     (-lookup this k not-found))
 
-  IPrintWithWriter
-  (-pr-writer [_ writer opts]
-    (-pr-writer (assoc cache :db/id eid) writer opts)))
-
-
-(goog/exportSymbol "datascript.impl.entity.Entity.prototype.get"       (.-get       (.-prototype Entity)))
-(goog/exportSymbol "datascript.impl.entity.Entity.prototype.has"       (.-has       (.-prototype Entity)))
-(goog/exportSymbol "datascript.impl.entity.Entity.prototype.forEach"   (.-forEach   (.-prototype Entity)))
-(goog/exportSymbol "datascript.impl.entity.Entity.prototype.key_set"   (.-key_set   (.-prototype Entity)))
-(goog/exportSymbol "datascript.impl.entity.Entity.prototype.value_set" (.-value_set (.-prototype Entity)))
-(goog/exportSymbol "datascript.impl.entity.Entity.prototype.entry_set" (.-entry_set (.-prototype Entity)))
-(goog/exportSymbol "datascript.impl.entity.Entity.prototype.keys"      (.-keys      (.-prototype Entity)))
-(goog/exportSymbol "datascript.impl.entity.Entity.prototype.values"    (.-values    (.-prototype Entity)))
-(goog/exportSymbol "datascript.impl.entity.Entity.prototype.entries"   (.-entries   (.-prototype Entity)))
-
-(goog/exportSymbol "cljs.core.ES6Iterator.prototype.next"        (.-next (.-prototype cljs.core/ES6Iterator)))
-(goog/exportSymbol "cljs.core.ES6EntriesIterator.prototype.next" (.-next (.-prototype cljs.core/ES6EntriesIterator)))
+  ;IPrintWithWriter
+  ;(-pr-writer [_ writer opts]
+  ;  (-pr-writer (assoc cache :db/id eid) writer opts)))
+  )

@@ -12,16 +12,16 @@
     (pr-str this)))
 
 (extend-type Datom
-  IHash
+  IObject
   (-hash [d] (or (.-__hash d)
                  (set! (.-__hash d)
                        (-> (hash (.-e d))
                            (hash-combine (hash (.-a d)))
                            (hash-combine (hash (.-v d)))))))
-  IEquiv
-  (-equiv [d o] (and (= (.-e d) (.-e o))
-                     (= (.-a d) (.-a o))
-                     (= (.-v d) (.-v o))))
+
+  (-eq[d o] (and (= (.-e d) (.-e o))
+                 (= (.-a d) (.-a o))
+                 (= (.-v d) (.-v o))))
 
   ISeqable
   (-seq [d] (list (.-e d) (.-a d) (.-v d) (.-tx d) (.-added d))))
@@ -168,12 +168,12 @@
         :else false))))
 
 (extend-type DB
-  IHash
+  IObject
   (-hash [this]
     (or (.-__hash this)
         (set! (.-__hash this) (hash-coll (.-eavt this)))))
-  IEquiv
-  (-equiv [this other]
+
+  (-eq [this other]
     (and (instance? DB other)
          (= (.-schema this) (.-schema other))
          (equiv-index (.-eavt this) (.-eavt other)))))
@@ -238,12 +238,11 @@
 (defn- explode [db entity]
   (let [eid (:db/id entity)]
     (for [[a vs] (dissoc entity :db/id)
-          :let   [reverse-a (reverse-ref a)]
           v      (if (and (or (array? vs) (coll? vs))
                           (not (map? vs))
                           (multival? db a))
                    vs [vs])]
-      (if reverse-a
+      (if-let [reverse-a (reverse-ref a)]
         [:db/add v   reverse-a eid]
         [:db/add eid a         v]))))
 
@@ -305,11 +304,11 @@
                 (if (multival? db a)
                   (if (some #(= (.-v %) ov) datoms)
                     (recur (transact-add report [:db/add e a nv]) entities)
-                    (throw (js/Error. (str ":db.fn/cas failed on datom [" e " " a " " (map :v datoms) "], expected " ov))))
+                    (throw (str ":db.fn/cas failed on datom [" e " " a " " (map :v datoms) "], expected " ov)))
                   (let [v (.-v (first datoms))] 
                     (if (= v ov)
                       (recur (transact-add report [:db/add e a nv]) entities)
-                      (throw (js/Error. (str ":db.fn/cas failed on datom [" e " " a " " v "], expected " ov)))))))
+                      (throw (str ":db.fn/cas failed on datom [" e " " a " " v "], expected " ov))))))
            
             (tx-id? e)
               (recur report (concat [[op (current-tx report) a v]] entities))

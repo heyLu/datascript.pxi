@@ -32,8 +32,7 @@
   :author "Nikita Prokopov"}
   datascript.btset
 
-  (require datascript.utils :as u)
-  (refer 'datascript.utils :refer :all))
+  (:require [datascript.utils :refer :all]))
 
 (declare BTSet Node LeafNode)
 

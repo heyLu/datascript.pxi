@@ -105,26 +105,27 @@
 ;; printing and reading
 ;; #datomic/DB {:schema <map>, :datoms <vector of [e a v tx]>}
 
-(extend-type dc/Datom
-  IPrintWithWriter
-  (-pr-writer [d w opts]
-    (pr-sequential-writer w pr-writer "#datascript/Datom [" " " "]" opts [(.-e d) (.-a d) (.-v d) (.-tx d) (.-added d)])))
+;(extend-type dc/Datom
+;  IPrintWithWriter
+;  (-pr-writer [d w opts]
+;    (pr-sequential-writer w pr-writer "#datascript/Datom [" " " "]" opts [(.-e d) (.-a d) (.-v d) (.-tx d) (.-added d)])))
 
 (defn datom-from-reader [[e a v tx added]]
   (dc/Datom. e a v tx added))
 
 (extend-type dc/DB
-  IPrintWithWriter
-  (-pr-writer [db w opts]
-    (-write w "#datascript/DB {")
-    (-write w ":schema ")
-    (pr-writer (.-schema db) w opts)
-    (-write w ", :datoms ")
-    (pr-sequential-writer w
-      (fn [d w opts]
-        (pr-sequential-writer w pr-writer "[" " " "]" opts [(.-e d) (.-a d) (.-v d) (.-tx d)]))
-      "[" " " "]" opts (.-eavt db))
-    (-write w "}")))
+  ;IPrintWithWriter
+  ;(-pr-writer [db w opts]
+  ;  (-write w "#datascript/DB {")
+  ;  (-write w ":schema ")
+  ;  (pr-writer (.-schema db) w opts)
+  ;  (-write w ", :datoms ")
+  ;  (pr-sequential-writer w
+  ;    (fn [d w opts]
+  ;      (pr-sequential-writer w pr-writer "[" " " "]" opts [(.-e d) (.-a d) (.-v d) (.-tx d)]))
+  ;    "[" " " "]" opts (.-eavt db))
+  ;  (-write w "}")))
+  )
 
 (defn db-from-reader [{:keys [schema datoms]}]
   (init-db (map (fn [[e a v tx]] (dc/Datom. e a v tx true)) datoms) schema))
@@ -160,7 +161,7 @@
 (defn- future-call [f]
   (let [res      (atom nil)
         realized (atom false)]
-    (js/setTimeout #(do (reset! res (f)) (reset! realized true)) 0)
+    ;(js/setTimeout #(do (reset! res (f)) (reset! realized true)) 0)
     (reify
       IDeref
       (-deref [_] @res)
@@ -178,7 +179,8 @@
 (defn squuid []
   (UUID.
     (str
-          (-> (js/Date.) (.getTime) (/ 1000) (Math/round) (.toString 16))
+          ;(-> (js/Date.) (.getTime) (/ 1000) (Math/round) (.toString 16))
+          (throw (str "not implemented"))
       "-" (-> (rand-bits 16) (.toString 16))
       "-" (-> (rand-bits 16) (bit-and 0x0FFF) (bit-or 0x4000) (.toString 16))
       "-" (-> (rand-bits 16) (bit-and 0x3FFF) (bit-or 0x8000) (.toString 16))
@@ -188,5 +190,6 @@
 
 (defn squuid-time-millis [uuid]
   (-> (subs (.-uuid uuid) 0 8)
-      (js/parseInt 16)
+      ;(js/parseInt 16)
+      (throw (str "not implemented"))
       (* 1000)))
